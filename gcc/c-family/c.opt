@@ -1204,6 +1204,10 @@ fpreprocessed
 C ObjC C++ ObjC++
 Treat the input file as already preprocessed
 
+fseparate-checking
+C++ ObjC++ Var(flag_separate_checking, false)
+Enable separate checking for constrained templates
+
 ftrack-macro-expansion
 C ObjC C++ ObjC++ JoinedOrMissing RejectNegative UInteger
 ; converted into ftrack-macro-expansion=
