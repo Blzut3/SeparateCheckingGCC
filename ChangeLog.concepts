@@ -1,7 +1,20 @@
 2014-02-09  Andrew Sutton  <andrew.n.sutton@gmail.com>
 
+	Rewrite normalization in terms of constraints.
+	* gcc/cp/cp-tree.h (is_constraint): New.
+	* gcc/cp/constraint.cc (normalize_*): Rewrite the previous normalization
+	model so that it conforms with the specification. Normalization applies
+	to constraints. Transformation of expressions into constraints now
+	happens in two phases: lifting concept definitions, and the actual
+	transformation.
+	(tranform_expression, xform_*): New. Define transformation of 
+	expressions into constraints.
+	(lift_constraints): New. Stubbed out inlining function.
+
+2014-02-09  Andrew Sutton  <andrew.n.sutton@gmail.com>
+
 	Start refactoring constraints to match the specification.
-	* gcc/cp/cp-tree.def: Add new TREECODES for constraints.
+	* gcc/cp/cp-tree.def: Add new TREECODEs for constraints.
 	* gcc/cp/cp-tree.h: Add accessor macros for constraint operands.
 
 2015-02-05  Braden Obrzut  <admin@maniacsvault.net>
