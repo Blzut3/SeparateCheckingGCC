@@ -890,6 +890,46 @@ check_constraint_info (tree t)
 #define TEMPLATE_PARM_CONSTRAINTS(NODE) \
   TREE_TYPE (TREE_LIST_CHECK (NODE))
 
+/* The expression evaluated by the predicate constraint. */
+#define PRED_CONSTR_EXPR(NODE) \
+  TREE_OPERAND (TREE_CHECK (NODE, PRED_CONSTR), 0)
+
+/* The expression validated by the predicate constraint. */
+#define EXPR_CONST_EXPR(NODE) \
+  TREE_OPERAND (TREE_CHECK (NODE, EXPR_CONSTR), )
+
+/* The type validated by the predicate constraint. */
+#define TYPE_CONST_TYPE(NODE) \
+  TREE_OPERAND (TREE_CHECK (NODE, TYPE_CONSTR), 0)
+
+/* In an implicit conversion constraint, the source expression. */
+#define ICONV_CONSTR_EXPR(NODE) \
+  TREE_OPERAND (TREE_CHECK (NODE, ICONV_CONSTR), 1)
+
+/* In an implicit conversion constraint, the target type. */
+#define ICONV_CONSTR_TYPE(NODE) \
+  TREE_OPERAND (TREE_CHECK (NODE, ICONV_CONSTR), 0)
+
+/* In an argument deduction constraint, the source expression. */
+#define DEDUCT_CONSTR_EXPR(NODE) \
+  TREE_OPERAND (TREE_CHECK (NODE, DEDUCT_CONSTR), 0)
+
+/* In an argument deduction constraint, the target type pattern. */
+#define DEDUCT_CONSTR_PATTERN(NODE) \
+  TREE_OPERAND (TREE_CHECK (NODE, DEDUCT_CONSTR), 1)
+
+/* The expression of an exception constraint. */
+#define EXCEPT_CONSTR_EXPR(NODE) \
+  TREE_OPERAND (TREE_CHECK (NODE, EXCEPT_CONSTR), 0)
+
+/* In a parameterized constraint, the local parameters. */
+#define PARM_CONSTR_PARMS(NODE) \
+  TREE_OPERAND (TREE_CHECK (NODE, PARM_CONSTR), 0)
+
+/* In a parameterized constraint, the operand. */
+#define PARM_CONSTR_OPERAND(NODE) \
+  TREE_OPERAND (TREE_CHECK (NODE, PARM_CONSTR), 1)
+
 enum cp_tree_node_structure_enum {
   TS_CP_GENERIC,
   TS_CP_IDENTIFIER,
