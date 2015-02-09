@@ -1,3 +1,9 @@
+2014-02-09  Andrew Sutton  <andrew.n.sutton@gmail.com>
+
+	Start refactoring constraints to match the specification.
+	* gcc/cp/cp-tree.def: Add new TREECODES for constraints.
+	* gcc/cp/cp-tree.h: Add accessor macros for constraint operands.
+
 2014-09-25  Andrew Sutton  <andrew.n.sutton@gmail.com>
 
 	Explicitly disallow function concepts with deduced return types.
