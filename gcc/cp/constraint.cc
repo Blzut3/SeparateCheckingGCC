@@ -307,17 +307,14 @@ check_function_concept (tree fn)
 }
 
 
-// -------------------------------------------------------------------------- //
-// Normalization
-//
-// Normalize a constraint be ensuring that we have only conjunctions
-// and disjunctions of atomic constraints. 
 
 namespace {
 
-tree normalize_constraint (tree);
+/*---------------------------------------------------------------------------
+                       Lifting of concept definitions
+---------------------------------------------------------------------------*/
+
 tree lift_constraints (tree);
-tree transform_expression (tree);
 
 #if 0
 // Do a cursory investigation of the target in the call expression
@@ -436,51 +433,11 @@ lift_constraints (tree t)
   return t;
 }
 
-tree xform_expr (tree);
-tree xform_stmt (tree);
-tree xform_decl (tree);
-tree xform_misc (tree);
+/*---------------------------------------------------------------------------
+                        Constraint normalization
+---------------------------------------------------------------------------*/
 
-/* Transform a lifted expression into a constraint. This either
-   returns a constraint, or it returns error_mark_node when
-   a constraint cannot be formed. */
-tree
-transform_expression (tree t)
-{
-  if (!t) 
-    return NULL_TREE;
-  if (t == error_mark_node)
-    return t;
-
-  switch (TREE_CODE_CLASS (TREE_CODE (t))) 
-    {
-    case tcc_unary:
-    case tcc_binary:
-    case tcc_expression:
-    case tcc_vl_exp:
-      return xform_expr (t);
-    
-    case tcc_statement:   
-      return xform_stmt (t);
-    
-    case tcc_declaration: 
-      return xform_decl (t);
-    
-    case tcc_exceptional: 
-      return xform_misc (t);
-    
-    case tcc_constant:
-    case tcc_reference:
-    case tcc_comparison:
-      /* These are atomic predicate constraints. */
-      return build_nt (PRED_CONSTR, t);
-
-    default:
-      /* Unhandled node kind. */
-      gcc_unreachable ();
-    }
-  return error_mark_node;
-}
+tree transform_expression (tree);
 
 /* Check that the logical-or or logical-and expression does
    not result in a call to a user-defined user-defined operator 
@@ -621,6 +578,54 @@ xform_misc (tree t)
     }
   return error_mark_node;
 }
+
+
+/* Transform a lifted expression into a constraint. This either
+   returns a constraint, or it returns error_mark_node when
+   a constraint cannot be formed. */
+tree
+transform_expression (tree t)
+{
+  if (!t) 
+    return NULL_TREE;
+  if (t == error_mark_node)
+    return t;
+
+  switch (TREE_CODE_CLASS (TREE_CODE (t))) 
+    {
+    case tcc_unary:
+    case tcc_binary:
+    case tcc_expression:
+    case tcc_vl_exp:
+      return xform_expr (t);
+    
+    case tcc_statement:   
+      return xform_stmt (t);
+    
+    case tcc_declaration: 
+      return xform_decl (t);
+    
+    case tcc_exceptional: 
+      return xform_misc (t);
+    
+    case tcc_constant:
+    case tcc_reference:
+    case tcc_comparison:
+      /* These are atomic predicate constraints. */
+      return build_nt (PRED_CONSTR, t);
+
+    default:
+      /* Unhandled node kind. */
+      gcc_unreachable ();
+    }
+  return error_mark_node;
+}
+
+/*---------------------------------------------------------------------------
+                        Constraint normalization
+---------------------------------------------------------------------------*/
+
+tree normalize_constraint (tree);
 
 /* The normal form of the disjunction T0 /\ T1 is the conjunction
    of the normal form of T0 and the normal form of T1 */

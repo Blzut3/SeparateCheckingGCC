@@ -1,4 +1,11 @@
-2014-02-09  Andrew Sutton  <andrew.n.sutton@gmail.com>
+2014-02-10  Andrew Sutton  <andrew.n.sutton@gmail.com>
+
+	* gcc/cp/logic.cc: Rewrite to use new constraint model and
+	update formatting.
+	* gcc/cp/constraint.cc: Documentation and organization.
+
+2014-02-10  Andrew Sutton  <andrew.n.sutton@gmail.com>
+
 	* gcc/cp/cp-tree.h (is_constraint): Make static.
 
 2014-02-09  Andrew Sutton  <andrew.n.sutton@gmail.com>
