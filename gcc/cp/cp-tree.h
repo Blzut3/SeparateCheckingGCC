@@ -6501,7 +6501,6 @@ extern tree strip_using_decl                    (tree);
 
 /* in constraint.cc */
 
-extern bool is_constraint                       (tree);
 extern tree conjoin_constraints                 (tree, tree);
 extern tree conjoin_constraints                 (tree);
 extern tree get_constraints                     (tree);

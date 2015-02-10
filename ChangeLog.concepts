@@ -1,4 +1,7 @@
 2014-02-09  Andrew Sutton  <andrew.n.sutton@gmail.com>
+	* gcc/cp/cp-tree.h (is_constraint): Make static.
+
+2014-02-09  Andrew Sutton  <andrew.n.sutton@gmail.com>
 
 	Rewrite normalization in terms of constraints.
 	* gcc/cp/cp-tree.h (is_constraint): New.
