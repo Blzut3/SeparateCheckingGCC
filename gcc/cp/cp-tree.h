@@ -895,11 +895,11 @@ check_constraint_info (tree t)
   TREE_OPERAND (TREE_CHECK (NODE, PRED_CONSTR), 0)
 
 /* The expression validated by the predicate constraint. */
-#define EXPR_CONST_EXPR(NODE) \
-  TREE_OPERAND (TREE_CHECK (NODE, EXPR_CONSTR), )
+#define EXPR_CONSTR_EXPR(NODE) \
+  TREE_OPERAND (TREE_CHECK (NODE, EXPR_CONSTR), 0)
 
 /* The type validated by the predicate constraint. */
-#define TYPE_CONST_TYPE(NODE) \
+#define TYPE_CONSTR_TYPE(NODE) \
   TREE_OPERAND (TREE_CHECK (NODE, TYPE_CONSTR), 0)
 
 /* In an implicit conversion constraint, the source expression. */

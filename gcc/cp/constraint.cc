@@ -1352,38 +1352,153 @@ finish_concept_introduction (tree tmpl_decl, tree intro_list)
   return parm_list;
 }
 
-// -------------------------------------------------------------------------- //
-// Substitution Rules
-//
-// The following functions implement substitution rules for constraints.
+/*---------------------------------------------------------------------------
+                        Constraint satisfaction 
+---------------------------------------------------------------------------*/
+
+/* The following functions determine if a constraint, when
+   substituting template arguments, is satisfied. For convenience,
+   satisfaction reduces a constraint to either true or false (and
+   nothing else). */
 
 namespace {
-// In an unevaluated context, the substitution of parm decls are not
-// properly chained during substitution. Do that here.
-tree
-fix_local_parms (tree sparms)
-{
-  if (!sparms)
-    return sparms;
 
-  tree p = TREE_CHAIN (sparms);
-  tree q = sparms;
+tree check_constraint (tree, tree, tsubst_flags_t, tree);
+
+/* A predicate constraint is satisfied if its expression evaluates
+   to true. If substitution into that node fails, the constraint
+   is not satisfied ([temp.constr.pred]).
+
+   Note that a predicate constraint is a constraint expression
+   of type bool. If neither of those are true, the program is
+   ill-formed; they are not SFINAE'able errors. */
+tree
+check_predicate_constraint (tree t, tree args, 
+                             tsubst_flags_t complain, tree in_decl)
+{
+  tree expr = tsubst_expr (t, args, complain, in_decl, false);
+  if (expr == error_mark_node)
+    return boolean_false_node;
+
+  tree result = fold_non_dependent_expr (expr);
+  if (result == error_mark_node)
+    return boolean_false_node;
+  
+  if (TREE_TYPE (result) != boolean_type_node)
+    {
+      error ("constraint %qE does not have type %qT", result, boolean_type_node);
+      return boolean_false_node;
+    }
+  return result;
+}
+
+/* Check an expression constraint. The constraint is satisfied if
+   substitution succeeds ([temp.constr.expr]). 
+
+   Note that the expression is unevaluated. */
+tree
+check_expression_constraint (tree t, tree args, 
+                             tsubst_flags_t complain, tree in_decl)
+{
+  cp_unevaluated guard;
+  tree expr = EXPR_CONSTR_EXPR (t);
+  tree check = tsubst_expr (expr, args, complain, in_decl, false);
+  if (check == error_mark_node)
+    return boolean_false_node;
+  return boolean_true_node;
+}
+
+/* Check a type constraint. The constraint is satisfied if
+   substitution succeeds. */
+inline tree
+check_type_constraint (tree t, tree args, 
+                       tsubst_flags_t complain, tree in_decl)
+{
+  tree type = TYPE_CONSTR_TYPE (t);
+  tree check = tsubst (type, args, complain, in_decl);
+  if (check == error_mark_node)
+    return boolean_false_node;
+  return boolean_true_node;
+}
+
+/* Check an implicit conversion constraint. */
+tree
+check_implicit_conversion_constraint (tree t, tree args, 
+                                      tsubst_flags_t complain, tree in_decl)
+{
+  tree expr = ICONV_CONSTR_EXPR (t);
+  tree arg = tsubst_expr (expr, args, complain, in_decl, false);
+  if (arg == error_mark_node)
+    return boolean_false_node;
+  tree from = TREE_TYPE (arg);
+
+  tree type = ICONV_CONSTR_TYPE (t);
+  tree to = tsubst (type, args, complain, in_decl);
+  if (to == error_mark_node)
+    return boolean_false_node;
+
+  if (can_convert_arg (to, from, arg, LOOKUP_IMPLICIT, complain))
+    return boolean_true_node;
+  else
+    return boolean_false_node;
+}
+
+/* Check an argument deduction constraint.
+
+   TODO: Implement me. We need generalized auto for this to work. */
+inline tree
+check_argument_deduction_constraint (tree /*t*/, tree /*args*/, 
+                                     tsubst_flags_t /*complain*/, 
+                                     tree /*in_decl*/)
+{
+  gcc_unreachable ();
+  return boolean_false_node;
+}
+
+/* Check an exception constraint. An exception constraint for an
+   expression e is satisfied when noexcept(e) is true. */
+inline tree
+check_exception_constraint (tree t, tree args, 
+                             tsubst_flags_t complain, tree in_decl)
+{
+  tree expr = EXCEPT_CONSTR_EXPR (t);
+  tree check = tsubst_expr (expr, args, complain, in_decl, false);
+  if (check == error_mark_node)
+    return boolean_false_node;
+
+  if (expr_noexcept_p (check, complain))
+    return boolean_true_node;
+  else
+    return boolean_false_node;
+}
+
+/* In an unevaluated context, the substitution of PARM_DECLs are not
+   properly chained during substitution. Do that here. */
+tree
+fixup_constraint_vars (tree parms)
+{
+  if (!parms)
+    return parms;
+
+  tree p = TREE_CHAIN (parms);
+  tree q = parms;
   while (p && TREE_VALUE (p) != void_type_node)
     {
       DECL_CHAIN (TREE_VALUE (q)) = TREE_VALUE (p);
       q = p;
       p = TREE_CHAIN (p);
     }
-  return sparms;
+  return parms;
 }
 
-// Register local specializations for each of tparm and the corresponding
-// sparm. This is a helper function for tsubst_requires_expr.
-void
-declare_local_parms (tree tparms, tree sparms)
+/* Register local specializations for each of parameter in
+   PARMS and its corresponding substituted constraint variable
+   in VARS. Returns VARS. */
+tree
+declare_constraint_vars (tree parms, tree vars)
 {
-  tree s = TREE_VALUE (sparms);
-  for (tree p = tparms; p && !VOID_TYPE_P (TREE_VALUE (p)); p = TREE_CHAIN (p))
+  tree s = TREE_VALUE (vars);
+  for (tree p = parms; p && !VOID_TYPE_P (TREE_VALUE (p)); p = TREE_CHAIN (p))
     {
       tree t = TREE_VALUE (p);
       if (DECL_PACK_P (t))
@@ -1397,26 +1512,100 @@ declare_local_parms (tree tparms, tree sparms)
           s = TREE_CHAIN (s);
         }
     }
+  return vars;
 }
 
-// Substitute ARGS into the parameter list T, producing a sequence of
-// local parameters (variables) in the current scope.
+/* Substitute ARGS into the parameter list T, producing a sequence of
+   constraint variables, declared in the current scope. If */
 tree
-tsubst_local_parms (tree t,
-                    tree args,
-                    tsubst_flags_t complain,
-                    tree in_decl)
+tsubst_constraint_variables (tree t, tree args,
+                             tsubst_flags_t complain, tree in_decl)
 {
-  tree r = fix_local_parms (tsubst (t, args, complain, in_decl));
-  if (r == error_mark_node)
+  tree vars = tsubst (t, args, complain, in_decl);
+  if (vars == error_mark_node)
     return error_mark_node;
-
-  // Register the instantiated args as local parameters.
-  if (t)
-    declare_local_parms (t, r);
-
-  return r;
+  return declare_constraint_vars (t, fixup_constraint_vars (vars));
 }
+
+/* Check a parameterized constraint. */
+inline tree
+check_parameterized_constraint (tree t, tree args, 
+                                tsubst_flags_t complain, tree in_decl)
+{
+  local_specialization_stack stack;
+  tree parms = PARM_CONSTR_PARMS (t);
+  tree vars = tsubst_constraint_variables (parms, args, complain, in_decl);
+  if (vars == error_mark_node)
+    return boolean_false_node;
+  
+  tree constr = PARM_CONSTR_OPERAND (t);
+  return check_constraint (constr, args, complain, in_decl);
+}
+
+/* Check that the conjunction of constraints is satisfied. Note
+   that if left operand is not satisfied, the right operand
+   is not checked. */
+tree
+check_conjunction (tree t, tree args, tsubst_flags_t complain, tree in_decl)
+{
+  tree t0 = check_constraint (TREE_OPERAND (t, 0), args, complain, in_decl);
+  if (t0 == boolean_false_node)
+    return t0;
+  tree t1 = check_constraint (TREE_OPERAND (t, 1), args, complain, in_decl);
+  if (t1 == boolean_false_node)
+    return t1;
+  return boolean_true_node;
+}
+
+/* Check that the disjunction of constraints is satisfied. Note
+   that if the left operand is satisfied, the right operand is not
+   checked. */
+tree
+check_disjunction (tree t, tree args, tsubst_flags_t complain, tree in_decl)
+{
+  tree t0 = check_constraint (TREE_OPERAND (t, 0), args, complain, in_decl);
+  if (t0 == boolean_true_node)
+    return t0;
+  tree t1 = check_constraint (TREE_OPERAND (t, 1), args, complain, in_decl);
+  if (t1 == boolean_true_node)
+    return t0;
+  return boolean_false_node;
+}
+
+/* Check that the constraint is satisfied, according to the rules 
+   for that constraint. Note that each check_* function returns
+   true or false, depending on whether it is satisfied or not. */
+tree 
+check_constraint (tree t, tree args, tsubst_flags_t complain, tree in_decl)
+{
+  if (!t)
+    return boolean_false_node;
+  switch (TREE_CODE (t))
+  {
+  case PRED_CONSTR:
+    return check_predicate_constraint (t, args, complain, in_decl);
+  case EXPR_CONSTR:
+    return check_expression_constraint (t, args, complain, in_decl);
+  case TYPE_CONSTR:
+    return check_type_constraint (t, args, complain, in_decl);
+  case ICONV_CONSTR:
+    return check_implicit_conversion_constraint (t, args, complain, in_decl);
+  case DEDUCT_CONSTR:
+    return check_argument_deduction_constraint (t, args, complain, in_decl);
+  case EXCEPT_CONSTR:
+    return check_exception_constraint (t, args, complain, in_decl);
+  case PARM_CONSTR:
+    return check_parameterized_constraint (t, args, complain, in_decl);
+  case CONJ_CONSTR:
+    return check_conjunction (t, args, complain, in_decl);
+  case DISJ_CONSTR:
+    return check_disjunction (t, args, complain, in_decl);
+  default:
+    gcc_unreachable ();
+    return boolean_false_node;
+  }
+}
+
 
 // Substitute ARGS into the requirement body (list of requirements), T.
 // Note that if any substitutions fail, then this is equivalent to
@@ -1439,12 +1628,16 @@ tsubst_requirement_body (tree t, tree args, tree in_decl)
 
 // Substitute ARGS into the requires expression T.
 tree
-tsubst_requires_expr (tree t, tree args, tsubst_flags_t complain, tree in_decl)
+tsubst_requires_expr (tree /*t*/, tree /*args*/, 
+                      tsubst_flags_t /*complain*/, tree /*in_decl*/)
 {
+  /* 
   local_specialization_stack stack;
   tree p = tsubst_local_parms (TREE_OPERAND (t, 0), args, complain, in_decl);
   tree r = tsubst_requirement_body (TREE_OPERAND (t, 1), args, in_decl);
   return finish_requires_expr (p, r);
+  */
+  return error_mark_node;
 }
 
 // Substitute ARGS into the valid-expr expression T.
@@ -1880,7 +2073,7 @@ diagnose_requires (location_t loc, tree t, tree args)
   // This lets us instantiate sub-expressions separately from the
   // requires clause.
   local_specialization_stack locals;
-  declare_local_parms (TREE_OPERAND (t, 0), TREE_OPERAND (subst, 0));
+  declare_constraint_vars (TREE_OPERAND (t, 0), TREE_OPERAND (subst, 0));
 
   // Iterate over the sub-requirements and try instantiating each.
   for (tree l = TREE_OPERAND (t, 1); l; l = TREE_CHAIN (l))
