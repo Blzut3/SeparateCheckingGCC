@@ -316,120 +316,219 @@ namespace {
 
 tree lift_constraints (tree);
 
-#if 0
-// Do a cursory investigation of the target in the call expression
-// with the aim of early diagnosis of ill-formed constraints.
-inline bool
-check_call (tree t)
-{
-  tree target = CALL_EXPR_FN (t);
-  if (TREE_CODE (target) != TEMPLATE_ID_EXPR)
-    return true;
-  tree tmpl = TREE_OPERAND (target, 0);
-  if (TREE_CODE (tmpl) != TEMPLATE_DECL)
-    return true;
-  tree decl = DECL_TEMPLATE_RESULT (tmpl);
-  if (TREE_CODE (decl) == VAR_DECL && DECL_DECLARED_CONCEPT_P (decl))
-    {
-      error ("invalid constraint %qE", t);
-      inform (input_location, "did you mean %qE", target);
-      return false;
-    }
-  return true;
-}
-
-// Reduction rules for the call expression T.
-//
-// If T is a call to a constraint instantiate its definition and
-// recursively reduce its returned expression.
+/* Inline a reference to a function concept.  */
 tree
-normalize_call (tree t)
+lift_call (tree t)
 {
-  if (!check_call (t))
-    return NULL_TREE;
-
-  // Is the function call actually a constraint check? If not, then it's
-  // an atom, and needs to be treated as such.
+  /* Try to resolve this function call as a concept.  If not, then it can be
+     returned as-is.  */
   tree check = resolve_constraint_check (t);
   if (!check)
-    return normalize_atom (t);
+    return t;
 
   tree fn = TREE_VALUE (check);
   tree args = TREE_PURPOSE (check);
 
-  // Reduce the body of the function into the constriants language.
-  tree body = normalize_node (DECL_SAVED_TREE (fn));
+  /* Extract the body of the function minus the return expression.  */
+  tree body = DECL_SAVED_TREE (fn);
   if (!body)
     return error_mark_node;
+  if (TREE_CODE (body) == BIND_EXPR)
+    body = BIND_EXPR_BODY (body);
+  gcc_assert (TREE_CODE (body) == RETURN_EXPR);
+  body = TREE_OPERAND (body, 0);
 
-  // Instantiate the reduced results using the deduced args.
+  /* Substitute template arguments to produce our inline expression.  */
   tree result = tsubst_constraint_expr (body, args, true);
   if (result == error_mark_node)
     return error_mark_node;
 
-  return result;
+  return lift_constraints (result);
 }
 
-// Reduction rules for a variable template-id T.
-//
-// If T is a constraint, instantiate its initializer and recursively reduce its
-// expression.
+/* Inline a refernece to a variable concept.  */
 tree
-normalize_var (tree t)
+lift_var (tree t)
 {
   tree decl = DECL_TEMPLATE_RESULT (TREE_OPERAND (t, 0));
   if (!DECL_DECLARED_CONCEPT_P (decl))
     return t;
 
-  // Reduce the initializer of the variable into the constriants language.
-  tree body = normalize_node (DECL_INITIAL (decl));
+  /* Extract the body from the variable initializer.  */
+  tree body = DECL_INITIAL (decl);
   if (!body)
     return error_mark_node;
 
-  // Instantiate the reduced results.
+  /* Subsitute the arguments to form our new inline expression.  */
   tree result = tsubst_constraint_expr (body, TREE_OPERAND (t, 1), false);
   if (result == error_mark_node)
     return error_mark_node;
 
-  return result;
+  return lift_constraints (result);
 }
 
-// Reduction rules for the template-id T.
-//
-// It turns out that we often get requirements being written like this:
-//
-//    template<typename T>
-//      requires Foo<T>
-//    void f()
-//
-// Where Foo<T> should actually be written as Foo<T>(). Generate an
-// error and suggest the improved writing.
+/* Determine if a template-id is a variable concept and inline.  */
 tree
-normalize_template_id (tree t)
+lift_template_id (tree t)
 {
-  tree tmpl = TREE_OPERAND (t, 0);
-  if (variable_concept_p (tmpl))
-    return normalize_var (t);
-  else
-    {
-      location_t locus = EXPR_LOC_OR_LOC (t, input_location);
-      error_at (locus, "invalid constraint %qE", t);
-
-      vec<tree, va_gc>* args = NULL;
-      tree c = finish_call_expr (t, &args, true, false, 0);
-      inform (locus, "did you mean %qE", c);
-
-      return error_mark_node;
-    }
+  if (variable_concept_p (TREE_OPERAND (t, 0)))
+    return lift_var (t);
+  return t;
 }
-#endif
 
-/* Inline references to specializations of concepts. 
-
-   FIXME: Implement me! */
+/* Inline references to specializations of concepts.  */
 tree 
 lift_constraints (tree t)
 {
+  if (t == NULL_TREE)
+    return NULL_TREE;
+  if (t == error_mark_node)
+    return error_mark_node;
+
+  /* Concepts can be referred to by call or variable.  The rest of the nodes
+     of an expression are to be passed through.  */
+  switch (TREE_CODE (t))
+    {
+    case CALL_EXPR:
+      return lift_call (t);
+    case TEMPLATE_ID_EXPR:
+      return lift_template_id (t);
+
+    case COND_EXPR:
+    case MODOP_EXPR:
+    case PSEUDO_DTOR_EXPR:
+    case VEC_PERM_EXPR:
+    case NEW_EXPR:
+      {
+	tree op0 = lift_constraints (TREE_OPERAND (t, 0));
+	tree op1 = lift_constraints (TREE_OPERAND (t, 1));
+	tree op2 = lift_constraints (TREE_OPERAND (t, 2));
+        return build_nt (TREE_CODE (t), op0, op1, op2);
+      }
+
+    case PLUS_EXPR:
+    case MINUS_EXPR:
+    case MULT_EXPR:
+    case TRUNC_DIV_EXPR:
+    case CEIL_DIV_EXPR:
+    case FLOOR_DIV_EXPR:
+    case ROUND_DIV_EXPR:
+    case EXACT_DIV_EXPR:
+    case BIT_AND_EXPR:
+    case BIT_IOR_EXPR:
+    case BIT_XOR_EXPR:
+    case TRUNC_MOD_EXPR:
+    case FLOOR_MOD_EXPR:
+    case TRUTH_ANDIF_EXPR:
+    case TRUTH_ORIF_EXPR:
+    case TRUTH_AND_EXPR:
+    case TRUTH_OR_EXPR:
+    case RSHIFT_EXPR:
+    case LSHIFT_EXPR:
+    case RROTATE_EXPR:
+    case LROTATE_EXPR:
+    case EQ_EXPR:
+    case NE_EXPR:
+    case MAX_EXPR:
+    case MIN_EXPR:
+    case LE_EXPR:
+    case GE_EXPR:
+    case LT_EXPR:
+    case GT_EXPR:
+    case COMPOUND_EXPR:
+    case DOTSTAR_EXPR:
+    case MEMBER_REF:
+    case PREDECREMENT_EXPR:
+    case PREINCREMENT_EXPR:
+    case POSTDECREMENT_EXPR:
+    case POSTINCREMENT_EXPR:
+    case DELETE_EXPR:
+      {
+	tree op0 = lift_constraints (TREE_OPERAND (t, 0));
+	tree op1 = lift_constraints (TREE_OPERAND (t, 1));
+        return build_nt (TREE_CODE (t), op0, op1);
+      }
+
+    case SIZEOF_EXPR:
+    case INDIRECT_REF:
+    case NEGATE_EXPR:
+    case TRUTH_NOT_EXPR:
+    case BIT_NOT_EXPR:
+    case ADDR_EXPR:
+    case UNARY_PLUS_EXPR:
+    case ALIGNOF_EXPR:
+    case AT_ENCODE_EXPR:
+    case ARROW_EXPR:
+    case THROW_EXPR:
+    case TYPEID_EXPR:
+    case REALPART_EXPR:
+    case IMAGPART_EXPR:
+    case PAREN_EXPR:
+    case CAST_EXPR:
+    case REINTERPRET_CAST_EXPR:
+    case CONST_CAST_EXPR:
+    case STATIC_CAST_EXPR:
+    case DYNAMIC_CAST_EXPR:
+    case IMPLICIT_CONV_EXPR:
+    case CONVERT_EXPR:
+    case NOP_EXPR:
+      {
+	tree op0 = lift_constraints (TREE_OPERAND (t, 0));
+	return build1 (TREE_CODE (t), TREE_TYPE (t), op0);
+      }
+
+    case SCOPE_REF:
+    case ARRAY_REF:
+    case RECORD_TYPE:
+    case UNION_TYPE:
+    case ENUMERAL_TYPE:
+    case INTEGER_TYPE:
+    case REAL_TYPE:
+    case BOOLEAN_TYPE:
+    case TEMPLATE_TYPE_PARM:
+    case TEMPLATE_TEMPLATE_PARM:
+    case BOUND_TEMPLATE_TEMPLATE_PARM:
+    case TEMPLATE_PARM_INDEX:
+    case POINTER_TYPE:
+    case REFERENCE_TYPE:
+    case OFFSET_TYPE:
+    case FUNCTION_TYPE:
+    case METHOD_TYPE:
+    case ARRAY_TYPE:
+    case TYPENAME_TYPE:
+    case UNBOUND_CLASS_TEMPLATE:
+    case TYPEOF_TYPE:
+    case DECLTYPE_TYPE:
+    case TYPE_DECL:
+    case INTEGER_CST:
+    case REAL_CST:
+    case STRING_CST:
+    case COMPLEX_CST:
+    case PTRMEM_CST:
+    case VOID_CST:
+    case PARM_DECL:
+    case CONST_DECL:
+    case FIELD_DECL:
+    case VAR_DECL:
+    case FUNCTION_DECL:
+    case NAMESPACE_DECL:
+    case OVERLOAD:
+    case BASELINK:
+    case TEMPLATE_DECL:
+    case COMPONENT_REF:
+    case USING_DECL:
+    case IDENTIFIER_NODE:
+    case CONSTRUCTOR:
+    case VA_ARG_EXPR:
+    case OFFSET_REF:
+    case EXPR_PACK_EXPANSION:
+    case NONTYPE_ARGUMENT_PACK:
+      return t;
+
+    default:
+      gcc_unreachable ();
+    }
+
   return t;
 }
 

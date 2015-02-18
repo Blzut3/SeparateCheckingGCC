@@ -1,4 +1,11 @@
-2014-02-16  Andrew Sutton  <andrew.n.sutton@gmail.com>
+2015-02-17  Braden Obrzut  <admin@maniacsvault.net>
+
+	* gcc/cp/constraint.cc (lift_call): Converted from normalize_call.
+	(lift_var): Converted from normalize_var.
+	(lift_template_id): Converted from normalize_template_id.
+	(lift_constraints): Implemented.
+
+2015-02-16  Andrew Sutton  <andrew.n.sutton@gmail.com>
 
 	* gcc/cp/cp-tree.h: (EXPR_CONSTR_EXPR, TYPE_CONSTR_TYPE): Fix 
 	typos in macro names.
@@ -6,17 +13,17 @@
 	constraint checking implementation so that it matches the
 	wording and rules in n4377.
 
-2014-02-10  Andrew Sutton  <andrew.n.sutton@gmail.com>
+2015-02-10  Andrew Sutton  <andrew.n.sutton@gmail.com>
 
 	* gcc/cp/logic.cc: Rewrite to use new constraint model and
 	update formatting.
 	* gcc/cp/constraint.cc: Documentation and organization.
 
-2014-02-10  Andrew Sutton  <andrew.n.sutton@gmail.com>
+2015-02-10  Andrew Sutton  <andrew.n.sutton@gmail.com>
 
 	* gcc/cp/cp-tree.h (is_constraint): Make static.
 
-2014-02-09  Andrew Sutton  <andrew.n.sutton@gmail.com>
+2015-02-09  Andrew Sutton  <andrew.n.sutton@gmail.com>
 
 	Rewrite normalization in terms of constraints.
 	* gcc/cp/cp-tree.h (is_constraint): New.
@@ -29,7 +36,7 @@
 	expressions into constraints.
 	(lift_constraints): New. Stubbed out inlining function.
 
-2014-02-09  Andrew Sutton  <andrew.n.sutton@gmail.com>
+2015-02-09  Andrew Sutton  <andrew.n.sutton@gmail.com>
 
 	Start refactoring constraints to match the specification.
 	* gcc/cp/cp-tree.def: Add new TREECODEs for constraints.
