@@ -316,6 +316,19 @@ namespace {
 
 tree lift_constraints (tree);
 
+/* If the tree T has operands, then lift any concepts out of them.  */
+tree
+lift_operands (tree t)
+{
+  if (int n = tree_operand_length (t))
+    {
+      t = copy_node (t);
+      for (int i = 0; i < n; ++i)
+	TREE_OPERAND (t, i) = lift_constraints (TREE_OPERAND (t, i));
+    }
+  return t;
+}
+
 /* Inline a reference to a function concept.  */
 tree
 lift_call (tree t)
@@ -324,7 +337,7 @@ lift_call (tree t)
      returned as-is.  */
   tree check = resolve_constraint_check (t);
   if (!check)
-    return t;
+      return lift_operands (t);
 
   tree fn = TREE_VALUE (check);
   tree args = TREE_PURPOSE (check);
@@ -339,7 +352,7 @@ lift_call (tree t)
   body = TREE_OPERAND (body, 0);
 
   /* Substitute template arguments to produce our inline expression.  */
-  tree result = tsubst_constraint_expr (body, args, true);
+  tree result = tsubst_expr (body, args,  tf_none, NULL_TREE, false);
   if (result == error_mark_node)
     return error_mark_node;
 
@@ -360,7 +373,7 @@ lift_var (tree t)
     return error_mark_node;
 
   /* Subsitute the arguments to form our new inline expression.  */
-  tree result = tsubst_constraint_expr (body, TREE_OPERAND (t, 1), false);
+  tree result = tsubst_expr (body, TREE_OPERAND (t, 1),  tf_none, NULL_TREE, false);
   if (result == error_mark_node)
     return error_mark_node;
 
@@ -394,142 +407,16 @@ lift_constraints (tree t)
     case TEMPLATE_ID_EXPR:
       return lift_template_id (t);
 
-    case COND_EXPR:
-    case MODOP_EXPR:
-    case PSEUDO_DTOR_EXPR:
-    case VEC_PERM_EXPR:
-    case NEW_EXPR:
+    case TREE_LIST:
       {
-	tree op0 = lift_constraints (TREE_OPERAND (t, 0));
-	tree op1 = lift_constraints (TREE_OPERAND (t, 1));
-	tree op2 = lift_constraints (TREE_OPERAND (t, 2));
-        return build_nt (TREE_CODE (t), op0, op1, op2);
+	t = copy_node (t);
+	TREE_VALUE (t) = lift_constraints (TREE_VALUE (t));
+	TREE_CHAIN (t) = lift_constraints (TREE_CHAIN (t));
+	return t;
       }
-
-    case PLUS_EXPR:
-    case MINUS_EXPR:
-    case MULT_EXPR:
-    case TRUNC_DIV_EXPR:
-    case CEIL_DIV_EXPR:
-    case FLOOR_DIV_EXPR:
-    case ROUND_DIV_EXPR:
-    case EXACT_DIV_EXPR:
-    case BIT_AND_EXPR:
-    case BIT_IOR_EXPR:
-    case BIT_XOR_EXPR:
-    case TRUNC_MOD_EXPR:
-    case FLOOR_MOD_EXPR:
-    case TRUTH_ANDIF_EXPR:
-    case TRUTH_ORIF_EXPR:
-    case TRUTH_AND_EXPR:
-    case TRUTH_OR_EXPR:
-    case RSHIFT_EXPR:
-    case LSHIFT_EXPR:
-    case RROTATE_EXPR:
-    case LROTATE_EXPR:
-    case EQ_EXPR:
-    case NE_EXPR:
-    case MAX_EXPR:
-    case MIN_EXPR:
-    case LE_EXPR:
-    case GE_EXPR:
-    case LT_EXPR:
-    case GT_EXPR:
-    case COMPOUND_EXPR:
-    case DOTSTAR_EXPR:
-    case MEMBER_REF:
-    case PREDECREMENT_EXPR:
-    case PREINCREMENT_EXPR:
-    case POSTDECREMENT_EXPR:
-    case POSTINCREMENT_EXPR:
-    case DELETE_EXPR:
-      {
-	tree op0 = lift_constraints (TREE_OPERAND (t, 0));
-	tree op1 = lift_constraints (TREE_OPERAND (t, 1));
-        return build_nt (TREE_CODE (t), op0, op1);
-      }
-
-    case SIZEOF_EXPR:
-    case INDIRECT_REF:
-    case NEGATE_EXPR:
-    case TRUTH_NOT_EXPR:
-    case BIT_NOT_EXPR:
-    case ADDR_EXPR:
-    case UNARY_PLUS_EXPR:
-    case ALIGNOF_EXPR:
-    case AT_ENCODE_EXPR:
-    case ARROW_EXPR:
-    case THROW_EXPR:
-    case TYPEID_EXPR:
-    case REALPART_EXPR:
-    case IMAGPART_EXPR:
-    case PAREN_EXPR:
-    case CAST_EXPR:
-    case REINTERPRET_CAST_EXPR:
-    case CONST_CAST_EXPR:
-    case STATIC_CAST_EXPR:
-    case DYNAMIC_CAST_EXPR:
-    case IMPLICIT_CONV_EXPR:
-    case CONVERT_EXPR:
-    case NOP_EXPR:
-      {
-	tree op0 = lift_constraints (TREE_OPERAND (t, 0));
-	return build1 (TREE_CODE (t), TREE_TYPE (t), op0);
-      }
-
-    case SCOPE_REF:
-    case ARRAY_REF:
-    case RECORD_TYPE:
-    case UNION_TYPE:
-    case ENUMERAL_TYPE:
-    case INTEGER_TYPE:
-    case REAL_TYPE:
-    case BOOLEAN_TYPE:
-    case TEMPLATE_TYPE_PARM:
-    case TEMPLATE_TEMPLATE_PARM:
-    case BOUND_TEMPLATE_TEMPLATE_PARM:
-    case TEMPLATE_PARM_INDEX:
-    case POINTER_TYPE:
-    case REFERENCE_TYPE:
-    case OFFSET_TYPE:
-    case FUNCTION_TYPE:
-    case METHOD_TYPE:
-    case ARRAY_TYPE:
-    case TYPENAME_TYPE:
-    case UNBOUND_CLASS_TEMPLATE:
-    case TYPEOF_TYPE:
-    case DECLTYPE_TYPE:
-    case TYPE_DECL:
-    case INTEGER_CST:
-    case REAL_CST:
-    case STRING_CST:
-    case COMPLEX_CST:
-    case PTRMEM_CST:
-    case VOID_CST:
-    case PARM_DECL:
-    case CONST_DECL:
-    case FIELD_DECL:
-    case VAR_DECL:
-    case FUNCTION_DECL:
-    case NAMESPACE_DECL:
-    case OVERLOAD:
-    case BASELINK:
-    case TEMPLATE_DECL:
-    case COMPONENT_REF:
-    case USING_DECL:
-    case IDENTIFIER_NODE:
-    case CONSTRUCTOR:
-    case VA_ARG_EXPR:
-    case OFFSET_REF:
-    case EXPR_PACK_EXPANSION:
-    case NONTYPE_ARGUMENT_PACK:
-      return t;
-
     default:
-      gcc_unreachable ();
+      return lift_operands (t);
     }
-
-  return t;
 }
 
 /*---------------------------------------------------------------------------

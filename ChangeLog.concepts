@@ -1,3 +1,12 @@
+2015-02-25  Braden Obrzut  <admin@maniacsvault.net>
+
+	* gcc/cp/constraint.cc (lift_operands): New.
+	(lift_call): Lift operands on function calls and don't use
+	tsubst_constraint_expr.
+	(lift_var): Don't use tsubst_constraint_expr.
+	(lift_constraints): Use the returned number of operands for most nodes
+	and also lift from TREE_LISTs.
+
 2015-02-17  Braden Obrzut  <admin@maniacsvault.net>
 
 	* gcc/cp/constraint.cc (lift_call): Converted from normalize_call.
