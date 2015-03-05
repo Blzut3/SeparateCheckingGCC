@@ -93,6 +93,7 @@ c-common.h, not after.
       PACK_EXPANSION_LOCAL_P (in *_PACK_EXPANSION)
       TINFO_RECHECK_ACCESS_P (in TEMPLATE_INFO)
       SIZEOF_EXPR_TYPE_P (in SIZEOF_EXPR)
+      COMPOUND_REQ_NOEXCEPT_P (in COMPOUND_REQ)
       INTRODUCED_PACK_P (in INTRODUCED_PARM_DECL)
    1: IDENTIFIER_VIRTUAL_P (in IDENTIFIER_NODE)
       TI_PENDING_TEMPLATE_FLAG.
@@ -890,6 +891,10 @@ check_constraint_info (tree t)
 #define TEMPLATE_PARM_CONSTRAINTS(NODE) \
   TREE_TYPE (TREE_LIST_CHECK (NODE))
 
+/* Non-zero if the noexcept is present in a compound requirement. */
+#define COMPOUND_REQ_NOEXCEPT_P(NODE) \
+  TREE_LANG_FLAG_0 (TREE_CHECK (NODE, COMPOUND_REQ))
+
 /* The expression evaluated by the predicate constraint. */
 #define PRED_CONSTR_EXPR(NODE) \
   TREE_OPERAND (TREE_CHECK (NODE, PRED_CONSTR), 0)
@@ -904,11 +909,11 @@ check_constraint_info (tree t)
 
 /* In an implicit conversion constraint, the source expression. */
 #define ICONV_CONSTR_EXPR(NODE) \
-  TREE_OPERAND (TREE_CHECK (NODE, ICONV_CONSTR), 1)
+  TREE_OPERAND (TREE_CHECK (NODE, ICONV_CONSTR), 0)
 
 /* In an implicit conversion constraint, the target type. */
 #define ICONV_CONSTR_TYPE(NODE) \
-  TREE_OPERAND (TREE_CHECK (NODE, ICONV_CONSTR), 0)
+  TREE_OPERAND (TREE_CHECK (NODE, ICONV_CONSTR), 1)
 
 /* In an argument deduction constraint, the source expression. */
 #define DEDUCT_CONSTR_EXPR(NODE) \
@@ -6501,56 +6506,42 @@ extern tree strip_using_decl                    (tree);
 
 /* in constraint.cc */
 
+extern bool constraint_p                        (tree);
+extern tree make_predicate_constraint           (tree);
 extern tree conjoin_constraints                 (tree, tree);
 extern tree conjoin_constraints                 (tree);
+extern bool valid_constraints_p                 (tree);
 extern tree get_constraints                     (tree);
 extern void set_constraints                     (tree, tree);
 extern void remove_constraints                  (tree);
 extern tree associate_classtype_constraints     (tree);
 extern tree build_constraints                   (tree, tree);
 extern tree get_shorthand_constraints           (tree);
-
 extern tree build_concept_check                 (tree, tree, tree = NULL_TREE);
 extern tree build_constrained_parameter         (tree, tree, tree = NULL_TREE);
 extern bool deduce_constrained_parameter        (tree, tree&, tree&);
 extern tree resolve_constraint_check            (tree);
 extern tree check_function_concept              (tree);
-
-extern tree finish_concept_introduction         (tree, tree);
-extern tree finish_template_constraints         (tree);
-extern tree save_leading_constraints            (tree);
-extern tree save_trailing_constraints           (tree);
+extern tree finish_template_introduction        (tree, tree);
 extern bool valid_requirements_p                (tree);
 extern tree finish_concept_name                 (tree);
 extern tree finish_shorthand_constraint         (tree, tree);
 extern tree finish_requires_expr                (tree, tree);
-extern tree finish_expr_requirement             (tree, tree, tree);
-extern tree finish_expr_requirement             (tree);
+extern tree finish_simple_requirement           (tree);
 extern tree finish_type_requirement             (tree);
+extern tree finish_compound_requirement         (tree, tree, bool);
 extern tree finish_nested_requirement           (tree);
-extern tree finish_constexpr_requirement        (tree);
-extern tree finish_noexcept_requirement         (tree);
-extern tree finish_validexpr_expr               (tree);
-extern tree finish_validtype_expr               (tree);
-extern tree finish_constexpr_expr               (tree);
-
 extern void check_constrained_friend            (tree, tree);
-
 extern tree tsubst_requires_expr                (tree, tree, tsubst_flags_t, tree);
-extern tree tsubst_validexpr_expr               (tree, tree, tree);
-extern tree tsubst_validtype_expr               (tree, tree, tree);
-extern tree tsubst_constexpr_expr               (tree, tree, tree);
-extern tree tsubst_expr_req                     (tree, tree, tree);
-extern tree tsubst_type_req                     (tree, tree, tree);
-extern tree tsubst_nested_req                   (tree, tree, tree);
+extern tree tsubst_constraint_info              (tree, tree, tsubst_flags_t, tree);
 
-extern tree tsubst_constraint_info              (tree, tree);
-extern tree tsubst_constraint_expr              (tree, tree, bool);
+extern bool constraints_satisfied_p             (tree);
+extern bool constraints_satisfied_p             (tree, tree);
+extern tree evaluate_function_concept           (tree, tree);
+extern tree evaluate_variable_concept           (tree, tree);
+extern tree evaluate_constraint_expression      (tree, tree);
+extern bool check_constraint_expression         (tree, tree);
 
-extern bool check_constraints                   (tree);
-extern bool check_constraints                   (tree, tree);
-extern bool check_template_constraints          (tree, tree);
-extern tree subst_template_constraints          (tree, tree);
 extern bool equivalent_constraints              (tree, tree);
 extern bool equivalently_constrained            (tree, tree);
 extern bool subsumes_constraints                (tree, tree);

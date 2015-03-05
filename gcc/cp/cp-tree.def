@@ -480,13 +480,40 @@ DEFTREECODE (TEMPLATE_INFO, "template_info", tcc_exceptional, 0)
 /* Used to represent information associated with constrained declarations. */
 DEFTREECODE (CONSTRAINT_INFO, "constraint_info", tcc_exceptional, 0)
 
-/* A requires-expr is a binary expression. The first operand is its
-   parameter list. The second is a list of requirements. */
-DEFTREECODE (REQUIRES_EXPR,   "requires_expr", tcc_expression, 2)
-
 /* Alternative PLACEHOLDER_EXPR which is used for concept introductions.  This
    is a temporary type which is used to produce normal template parameters.  */
 DEFTREECODE (INTRODUCED_PARM_DECL, "introduced_parm_decl", tcc_declaration, 0)
+
+/* A requires-expr is a binary expression. The first operand is 
+   its parameter list (possibly NULL). The second is a list of 
+   requirements, which are denoted by the _REQ* tree codes
+   below. */
+DEFTREECODE (REQUIRES_EXPR,   "requires_expr", tcc_expression, 2)
+
+/* A requirement for an expression. */
+DEFTREECODE (SIMPLE_REQ, "simple_req", tcc_expression, 1)
+
+/* A requirement for a type. */
+DEFTREECODE (TYPE_REQ, "type_req", tcc_expression, 1)
+
+/* A requirement for an expression and its properties. The
+   first operand is the expression, and the 2nd is its type.
+   The accessor COMPOUND_REQ_NOEXCEPT determines whether
+   the noexcept keyword was present. */
+DEFTREECODE (COMPOUND_REQ, "compound_req", tcc_expression, 2)
+
+/* A requires clause within a requires expression. */
+DEFTREECODE (NESTED_REQ, "nested_req", tcc_expression, 1)
+
+/* A unary expression representing a requirement for a valid expression. */
+DEFTREECODE (VALIDEXPR_EXPR, "validexpr_expr", tcc_expression, 1)
+
+/* A unary expression representing a requirement for a valid type. */
+DEFTREECODE (VALIDTYPE_EXPR, "validtype_expr", tcc_expression, 1)
+
+/* A unary expression representing a requirement for an expression that
+   can be evaluated at compile time. */
+DEFTREECODE (CONSTEXPR_EXPR, "contexpr_expr", tcc_expression, 1)
 
 
 /* Constraints are modeled as kinds of expressions.
@@ -543,24 +570,6 @@ DEFTREECODE (PARM_CONSTR, "parm_constr", tcc_expression, 2)
 DEFTREECODE (CONJ_CONSTR, "conj_constr", tcc_expression, 2)
 DEFTREECODE (DISJ_CONSTR, "disj_constr", tcc_expression, 2)
 
-
-/* FIXME: Deprecate these as soon as we no longer refer to them. */
-
-/* The REQ expressions are unary expressions that specify individual
-   statements in a requires clause. */
-DEFTREECODE (EXPR_REQ, "expr-req", tcc_expression, 1)
-DEFTREECODE (TYPE_REQ, "type-req", tcc_expression, 1)
-DEFTREECODE (NESTED_REQ, "nested-req", tcc_expression, 1)
-
-/* A unary expression representing a requirement for a valid expression. */
-DEFTREECODE (VALIDEXPR_EXPR, "validexpr_expr", tcc_expression, 1)
-
-/* A unary expression representing a requirement for a valid type. */
-DEFTREECODE (VALIDTYPE_EXPR, "validtype_expr", tcc_expression, 1)
-
-/* A unary expression representing a requirement for an expression that
-   can be evaluated at compile time. */
-DEFTREECODE (CONSTEXPR_EXPR, "contexpr_expr", tcc_expression, 1)
 
 /*
 Local variables:
