@@ -4079,14 +4079,15 @@ process_template_parm (tree list, location_t parm_loc, tree parm,
   DECL_ARTIFICIAL (decl) = 1;
   SET_DECL_TEMPLATE_PARM_P (decl);
 
-  // Build requirements for the type/template parameter.  This must be done
-  // after SET_DECL_TEMPLATE_PARM_P or process_template_parm could fail.
+  /* Build requirements for the type/template parameter.  
+     This must be done after SET_DECL_TEMPLATE_PARM_P or 
+     process_template_parm could fail. */
   reqs = finish_shorthand_constraint (parm, constr);
 
   pushdecl (decl);
 
-  // Build the parameter node linking the parameter declaration, its
-  // default argument (if any), and its constraints (if any).
+  /* Build the parameter node linking the parameter declaration, 
+     its default argument (if any), and its constraints (if any). */
   parm = build_tree_list (defval, parm);
   TEMPLATE_PARM_CONSTRAINTS (parm) = reqs;
 
@@ -6890,7 +6891,7 @@ is_compatible_template_arg (tree parm, tree arg)
 // parameter. The original parameter is saved as the TREE_TYPE of
 // ARG.
 static inline tree
-convert_placeholder_argument (tree parm, tree arg)
+convert_wildcard_argument (tree parm, tree arg)
 {
   TREE_TYPE (arg) = parm;
   return arg;
@@ -6919,8 +6920,8 @@ convert_template_argument (tree parm,
     return error_mark_node;
 
   /* Trivially convert placeholders. */
-  if (TREE_CODE (arg) == INTRODUCED_PARM_DECL)
-    return convert_placeholder_argument (parm, arg);
+  if (TREE_CODE (arg) == WILDCARD_DECL)
+    return convert_wildcard_argument (parm, arg);
 
   if (TREE_CODE (arg) == TREE_LIST
       && TREE_CODE (TREE_VALUE (arg)) == OFFSET_REF)
@@ -7239,11 +7240,12 @@ coerce_template_parameter_pack (tree parms,
 
       packed_args = make_tree_vec (TREE_VEC_LENGTH (packed_parms));
     }
-  /* Check if we have a placeholder pack, which indicates we're in the context
-     of a introduction list.  In that case we want to simply match this pack to
-     the single placeholder.  */
+  /* Check if we have a placeholder pack, which indicates we're 
+     in the context of a introduction list.  In that case we want 
+     to match this pack to the single placeholder.  */
   else if (arg_idx < nargs
-	   && IS_INTRODUCED_PACK (TREE_VEC_ELT (inner_args, arg_idx)))
+           && TREE_CODE (TREE_VEC_ELT (inner_args, arg_idx)) == WILDCARD_DECL
+           && WILDCARD_PACK_P (TREE_VEC_ELT (inner_args, arg_idx)))
     {
       nargs = arg_idx + 1;
       packed_args = make_tree_vec (1);
@@ -16647,9 +16649,8 @@ instantiate_alias_template (tree tmpl, tree args, tsubst_flags_t complain)
   /* We can't free this if a pending_template entry or last_error_tinst_level
      is pointing at it.  */
   if (last_pending_template == old_last_pend
-      && last_error_tinst_level == old_error_tinst) {
+      && last_error_tinst_level == old_error_tinst)
     ggc_free (tinst);
-  }
 
   return r;
 }
@@ -17017,9 +17018,8 @@ fn_type_unification (tree fn,
   /* We can't free this if a pending_template entry or last_error_tinst_level
      is pointing at it.  */
   if (last_pending_template == old_last_pend
-      && last_error_tinst_level == old_error_tinst) {
+      && last_error_tinst_level == old_error_tinst)
     ggc_free (tinst);
-  }
 
   return r;
 }
@@ -21916,7 +21916,7 @@ type_dependent_expression_p (tree expression)
   /* An unresolved name is always dependent.  */
   if (identifier_p (expression)
       || TREE_CODE (expression) == USING_DECL
-      || TREE_CODE (expression) == INTRODUCED_PARM_DECL)
+      || TREE_CODE (expression) == WILDCARD_DECL)
     return true;
 
   /* Some expression forms are never type-dependent.  */
@@ -23136,14 +23136,14 @@ struct GTY((for_user)) constr_entry
   tree ci;
 };
 
-/* Hashing function and equality fo constraint entries.. */
+/* Hashing function and equality for constraint entries. */
 struct constr_hasher : ggc_hasher<constr_entry *>
 {
   static hashval_t hash (constr_entry *e)
   {
     return (hashval_t)DECL_UID (e->decl);
   }
-  
+
   static bool equal (constr_entry *e1, constr_entry *e2)
   {
     return e1->decl == e2->decl;
@@ -23155,7 +23155,7 @@ struct constr_hasher : ggc_hasher<constr_entry *>
    both templates and their underlying declarations are mapped to the 
    same constraint information.
 
-   FIXME: This is defined in pt.c because it's garbage collection
+   FIXME: This is defined in pt.c because garbage collection
    code is not being generated for constraint.cc. */
 static GTY (()) hash_table<constr_hasher> *decl_constraints;
 
