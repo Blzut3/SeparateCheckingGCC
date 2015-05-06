@@ -2264,7 +2264,7 @@ static tree cp_parser_operator
 
 static void cp_parser_template_declaration
   (cp_parser *, bool);
-static void cp_parser_template_declaration_after_export
+static bool cp_parser_template_declaration_after_export
   (cp_parser* parser, bool member_p);
 static tree cp_parser_template_parameter_list
   (cp_parser *);
@@ -2450,7 +2450,7 @@ static tree cp_parser_function_definition_from_specifiers_and_declarator
   (cp_parser *, cp_decl_specifier_seq *, tree, const cp_declarator *);
 static tree cp_parser_function_definition_after_declarator
   (cp_parser *, bool);
-static void cp_parser_template_declaration_after_export
+static bool cp_parser_template_declaration_after_export
   (cp_parser *, bool);
 static void cp_parser_perform_template_parameter_access_checks
   (vec<deferred_access_check, va_gc> *);
@@ -11457,11 +11457,8 @@ cp_parser_declaration (cp_parser* parser)
     {
       /* At this point we may have a template declared by a concept
          introduction.  */
-      cp_parser_parse_tentatively (parser);
-      cp_parser_template_declaration (parser, /*member_p=*/false);
-
-      if (!cp_parser_parse_definitely (parser))
-	/* Try to parse a block-declaration, or a function-definition.  */
+      if(!cp_parser_template_declaration_after_export (parser,
+						       /*member_p=*/false))
 	cp_parser_block_declaration (parser, /*statement_p=*/false);
     }
 
@@ -21424,6 +21421,10 @@ cp_parser_member_declaration (cp_parser* parser)
 
       return;
     }
+  else if (cp_parser_template_declaration_after_export (parser, true))
+    {
+      return;
+    }
 
   /* Check for a using-declaration.  */
   if (cp_lexer_next_token_is_keyword (parser->lexer, RID_USING))
@@ -21481,13 +21482,6 @@ cp_parser_member_declaration (cp_parser* parser)
       cp_parser_static_assert (parser, /*member_p=*/true);
       return;
     }
-
-  /* Tentatively parse for a template since we may have a concept
-     introduction.  */
-  cp_parser_parse_tentatively (parser);
-  cp_parser_template_declaration (parser, /*member_p=*/true);
-  if (cp_parser_parse_definitely (parser))
-    return;
 
   parser->colon_corrects_to_scope_p = false;
 
@@ -24548,10 +24542,7 @@ cp_parser_template_declaration_after_template_parameters (cp_parser* parser,
 
   /* Tentatively parse for a new template parameter list, which can either be
      the template keyword or a template introduction.  */
-  cp_parser_parse_tentatively (parser);
-  cp_parser_template_declaration_after_export (parser, member_p);
-
-  if (!cp_parser_parse_definitely (parser))
+  if(!cp_parser_template_declaration_after_export (parser, member_p))
     {
       if (cxx_dialect >= cxx11
 	  && cp_lexer_next_token_is_keyword (parser->lexer, RID_USING))
@@ -24651,10 +24642,10 @@ cp_parser_template_declaration_after_template_parameters (cp_parser* parser,
 
 /* Parse a concept introduction header for a template-declaration.  */
 
-static void
+static bool
 cp_parser_template_introduction (cp_parser* parser, bool member_p)
 {
-  gcc_assert (cp_parser_parsing_tentatively (parser));
+  cp_parser_parse_tentatively (parser);
 
   tree saved_scope = parser->scope;
   tree saved_object_scope = parser->object_scope;
@@ -24678,11 +24669,13 @@ cp_parser_template_introduction (cp_parser* parser, bool member_p)
   parser->qualifying_scope = saved_qualifying_scope;
 
   if (concept_name == error_mark_node)
-    return;
+    cp_parser_simulate_error (parser);
 
   // Look for opening brace for introduction
-  if (!cp_parser_require (parser, CPP_OPEN_BRACE, RT_OPEN_BRACE))
-    return;
+  cp_parser_require (parser, CPP_OPEN_BRACE, RT_OPEN_BRACE);
+
+  if (!cp_parser_parse_definitely(parser))
+    return false;
 
   push_deferring_access_checks (dk_deferred);
 
@@ -24694,12 +24687,12 @@ cp_parser_template_introduction (cp_parser* parser, bool member_p)
   if (nargs == 0)
     {
       error ("an introduction-list shall not be empty");
-      return;
+      return true;
     }
 
   // Look for closing brace for introduction
   if (!cp_parser_require (parser, CPP_CLOSE_BRACE, RT_CLOSE_BRACE))
-    return;
+    return true;
 
   // Look up the concept for which we will be matching template parameters.
   tree tmpl_decl = cp_parser_lookup_name_simple (parser, concept_name,
@@ -24708,7 +24701,7 @@ cp_parser_template_introduction (cp_parser* parser, bool member_p)
     {
       cp_parser_name_lookup_error (parser, concept_name, tmpl_decl, NLE_NULL,
 				   token->location);
-      return;
+      return true;
     }
 
   // Build and associate the constraint.
@@ -24717,10 +24710,11 @@ cp_parser_template_introduction (cp_parser* parser, bool member_p)
     {
       cp_parser_template_declaration_after_template_parameters (parser, parms,
 								member_p);
-      return;
+      return true;
     }
 
   error_at (token->location, "no matching concept for introduction-list");
+  return true;
 }
 
 /* Parse a normal template-declaration header.  */
@@ -24815,13 +24809,20 @@ cp_parser_template_declaration_header (cp_parser* parser, bool member_p)
    `extern') keywords, if present, has already been scanned.  MEMBER_P
    is as for cp_parser_template_declaration.  */
 
-static void
+static bool
 cp_parser_template_declaration_after_export (cp_parser* parser, bool member_p)
 {
   if (cp_lexer_next_token_is_keyword (parser->lexer, RID_TEMPLATE))
-    cp_parser_template_declaration_header (parser, member_p);
-  else
-    cp_parser_template_introduction (parser, member_p);
+    {
+      cp_parser_template_declaration_header (parser, member_p);
+      return true;
+    }
+  else if (flag_concepts)
+    {
+      return cp_parser_template_introduction (parser, member_p);
+    }
+
+  return false;
 }
 
 /* Perform the deferred access checks from a template-parameter-list.
