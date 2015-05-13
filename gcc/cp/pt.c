@@ -2124,6 +2124,7 @@ determine_specialization (tree template_id,
 	  tree fn_arg_types;
 	  tree insttype;
 
+
 	  /* In case of explicit specialization, we need to check if
 	     the number of template headers appearing in the specialization
 	     is correct. This is usually done in check_explicit_specialization,
@@ -12715,6 +12716,11 @@ tsubst (tree t, tree args, tsubst_flags_t complain, tree in_decl)
 		TYPE_POINTER_TO (r) = NULL_TREE;
 		TYPE_REFERENCE_TO (r) = NULL_TREE;
 
+                /* Propagate constraints on placeholders. */
+                if (TREE_CODE (t) == TEMPLATE_TYPE_PARM)
+                  if (tree constr = DECL_SIZE_UNIT (TYPE_NAME (t)))
+                    DECL_SIZE_UNIT (TYPE_NAME (r)) = constr;
+
 		if (TREE_CODE (r) == TEMPLATE_TEMPLATE_PARM)
 		  /* We have reduced the level of the template
 		     template parameter, but not the levels of its
@@ -20017,7 +20023,8 @@ most_specialized_partial_spec (tree target, tsubst_flags_t complain)
 
           /* Keep the candidate only if the constraints are satisfied,
              or if we're not compiling with concepts.  */
-          if (!flag_concepts || constraints_satisfied_p (spec_tmpl, spec_args))
+          if (!flag_concepts 
+              || constraints_satisfied_p (spec_tmpl, spec_args))
             {
               list = tree_cons (spec_args, TREE_VALUE (t), list);
               TREE_TYPE (list) = TREE_TYPE (t);
@@ -22792,6 +22799,20 @@ listify_autos (tree type, tree auto_node)
 tree
 do_auto_deduction (tree type, tree init, tree auto_node)
 {
+  return do_auto_deduction (type, init, auto_node, 
+                            tf_warning_or_error, 
+                            adc_unspecified);
+}
+
+/* Replace occurrences of 'auto' in TYPE with the appropriate type deduced
+   from INIT.  AUTO_NODE is the TEMPLATE_TYPE_PARM used for 'auto' in TYPE.  
+   The CONTEXT determines the context in which auto deduction is performed
+   and is used to control error diagnostics.  */
+
+tree
+do_auto_deduction (tree type, tree init, tree auto_node, 
+                   tsubst_flags_t complain, auto_deduction_context context)
+{
   tree targs;
 
   if (init == error_mark_node)
@@ -22814,11 +22835,14 @@ do_auto_deduction (tree type, tree init, tree auto_node)
 	init = CONSTRUCTOR_ELT (init, 0)->value;
       else
 	{
-	  if (permerror (input_location, "direct-list-initialization of "
-			 "%<auto%> requires exactly one element"))
-	    inform (input_location,
-		    "for deduction to %<std::initializer_list%>, use copy-"
-		    "list-initialization (i.e. add %<=%> before the %<{%>)");
+          if (complain & tf_warning_or_error)
+            {
+	      if (permerror (input_location, "direct-list-initialization of "
+			     "%<auto%> requires exactly one element"))
+	        inform (input_location,
+		        "for deduction to %<std::initializer_list%>, use copy-"
+		        "list-initialization (i.e. add %<=%> before the %<{%>)");
+            }
 	  type = listify_autos (type, auto_node);
 	}
     }
@@ -22834,7 +22858,8 @@ do_auto_deduction (tree type, tree init, tree auto_node)
 	= finish_decltype_type (init, id, tf_warning_or_error);
       if (type != auto_node)
 	{
-	  error ("%qT as type rather than plain %<decltype(auto)%>", type);
+          if (complain & tf_warning_or_error)
+	    error ("%qT as type rather than plain %<decltype(auto)%>", type);
 	  return error_mark_node;
 	}
     }
@@ -22860,7 +22885,8 @@ do_auto_deduction (tree type, tree init, tree auto_node)
 	       in the diagnostic is not really useful to the user.  */
 	    {
 	      if (cfun && auto_node == current_function_auto_return_pattern
-		  && LAMBDA_FUNCTION_P (current_function_decl))
+		  && LAMBDA_FUNCTION_P (current_function_decl)
+                  && complain & tf_warning_or_error)
 		error ("unable to deduce lambda return type from %qE", init);
 	      else
 		error ("unable to deduce %qT from %qE", type, init);
@@ -22890,7 +22916,47 @@ do_auto_deduction (tree type, tree init, tree auto_node)
 
   if (processing_template_decl)
     targs = add_to_template_args (current_template_args (), targs);
-  return tsubst (type, targs, tf_warning_or_error, NULL_TREE);
+  tree deduced = tsubst (type, targs, complain, NULL_TREE);
+  if (deduced == error_mark_node)
+    return error_mark_node;
+
+  /* Check any placeholder constraints against the deduced type. */
+  if (flag_concepts && !processing_template_decl)
+    if (tree constr = DECL_SIZE_UNIT (TYPE_NAME (auto_node)))
+      {
+        /* Use the deduced type to check the associated constraints. */
+        tree cargs = make_tree_vec (1);
+        TREE_VEC_ELT (cargs, 0) = deduced;
+        constr = tsubst_constraint (constr, cargs, complain, NULL_TREE);
+        if (!constraints_satisfied_p (constr, cargs))
+          {
+            if (complain & tf_warning_or_error)
+              {
+                switch (context) 
+                  {
+                  case adc_unspecified:
+                    error("placeholder constraints not satisfied");
+                    break;
+                  case adc_variable_type:
+                    error ("deduced initializer does not satisfy "
+                           "placeholder constraints");
+                    break;
+                  case adc_return_type:
+                    error ("deduced return type does not satisfy "
+                           "placeholder constraints");
+                    break;
+                  case adc_requirement:
+                    error ("deduced expression type does not saatisy "
+                           "placeholder constraints");
+                    break;
+                  }
+                diagnose_constraints (input_location, constr, targs);
+              }
+            return error_mark_node;
+          }
+      }
+
+  return deduced;
 }
 
 /* Substitutes LATE_RETURN_TYPE for 'auto' in TYPE and returns the

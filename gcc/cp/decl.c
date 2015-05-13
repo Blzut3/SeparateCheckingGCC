@@ -4899,8 +4899,11 @@ start_decl (const cp_declarator *declarator,
 
   was_public = TREE_PUBLIC (decl);
 
-  /* Enter this declaration into the symbol table.  */
-  decl = maybe_push_decl (decl);
+  /* Enter this declaration into the symbol table.  Don't push the plain
+     VAR_DECL for a variable template.  */
+  if (!template_parm_scope_p ()
+      || TREE_CODE (decl) != VAR_DECL)
+    decl = maybe_push_decl (decl);
 
   if (processing_template_decl)
     decl = push_template_decl (decl);
@@ -6500,7 +6503,9 @@ cp_finish_decl (tree decl, tree init, bool init_const_expr_p,
 						  tf_warning_or_error);
       d_init = resolve_nondeduced_context (d_init);
       type = TREE_TYPE (decl) = do_auto_deduction (type, d_init,
-						   auto_node);
+						   auto_node, 
+                                                   tf_warning_or_error,
+                                                   adc_variable_type);
       if (type == error_mark_node)
 	return;
       cp_apply_type_quals_to_decl (cp_type_quals (type), decl);
@@ -7845,21 +7850,6 @@ grokfndecl (tree ctype,
 	      return NULL_TREE;
 	    }
 
-          // Do not allow the declaration of constrained friend template
-          // specializations. They cannot be instantiated since they
-          // must match a fully instantiated function, and non-dependent
-          // functions cannot be constrained.
-          //
-          // FIXME [concepts] This is no longer correct. We do disallow
-          // constraints on friend function template specializations.
-          //             
-          // if (current_template_reqs)
-          //   {
-          //     error ("constraints are not allowed in declaration "
-          //            "of friend template specialization %qD", decl);
-          //     return NULL_TREE;
-          //   }
-
 	  /* A friend declaration of the form friend void f<>().  Record
 	     the information in the TEMPLATE_ID_EXPR.  */
 	  SET_DECL_IMPLICIT_INSTANTIATION (decl);
@@ -8995,14 +8985,15 @@ check_var_type (tree identifier, tree type)
   return type;
 }
 
-// Return a trailing requires clause for a function declarator, or
-// NULL_TREE if there is no trailing requires clause or the declarator
-// is some other kind.
+/* Return a trailing requires clause for a function declarator, or
+   NULL_TREE if there is no trailing requires clause or the declarator
+   is some other kind.  */
+
 static inline tree
 get_trailing_requires_clause (const cp_declarator *declarator)
 {
-  if (declarator && declarator->kind == cdk_function)
-    return declarator->u.function.requires_clause;
+  if (const cp_declarator *d = get_function_declarator (declarator))
+    return d->u.function.requires_clause;
   else
     return NULL_TREE;
 }

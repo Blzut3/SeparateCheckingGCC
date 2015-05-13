@@ -3042,6 +3042,7 @@ add_template_candidate_real (struct z_candidate **candidates, tree tmpl,
   struct rejection_reason *reason = NULL;
   int errs;
 
+
   /* We don't do deduction on the in-charge parameter, the VTT
      parameter or 'this'.  */
   if (DECL_NONSTATIC_MEMBER_FUNCTION_P (tmpl))
@@ -4157,8 +4158,7 @@ build_new_function_call (tree fn, vec<tree, va_gc> **args, bool koenig_p,
               tree tmpl = DECL_TI_TEMPLATE (cand->fn);
               tree targs = DECL_TI_ARGS (cand->fn);
               tree decl = DECL_TEMPLATE_RESULT (tmpl);
-              if (DECL_DECLARED_CONCEPT_P (decl) 
-                  && !uses_template_parms (targs))
+              if (DECL_DECLARED_CONCEPT_P (decl))
                 return evaluate_function_concept (decl, targs);
             }
 
