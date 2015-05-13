@@ -24662,7 +24662,7 @@ cp_parser_template_introduction (cp_parser* parser, bool member_p)
 
   // Look for the optional `::' operator.
   cp_parser_global_scope_opt (parser,
-			      /*current_scope_valid_p=*/true);
+			      /*current_scope_valid_p=*/false);
   // Look for the nested-name-specifier.
   cp_parser_nested_name_specifier_opt (parser,
 				       /*typename_keyword_p=*/false,
