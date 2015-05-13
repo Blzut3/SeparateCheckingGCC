@@ -21418,6 +21418,7 @@ cp_parser_member_declaration (cp_parser* parser)
 
       return;
     }
+  /* Check for a template introduction.  */
   else if (cp_parser_template_declaration_after_export (parser, true))
     {
       return;
@@ -24525,9 +24526,9 @@ cp_parser_function_definition_after_declarator (cp_parser* parser,
 /* Parse a template-declaration body (following argument list).  */
 
 static void
-cp_parser_template_declaration_after_template_parameters (cp_parser* parser,
-							  tree parameter_list,
-							  bool member_p)
+cp_parser_template_declaration_after_parameters (cp_parser* parser,
+						 tree parameter_list,
+						 bool member_p)
 {
   tree decl = NULL_TREE;
   bool friend_p = false;
@@ -24641,7 +24642,8 @@ cp_parser_template_declaration_after_template_parameters (cp_parser* parser,
     vec_safe_push (unparsed_funs_with_definitions, decl);
 }
 
-/* Parse a concept introduction header for a template-declaration.  */
+/* Parse a concept introduction header for a template-declaration.  Returns
+   false if tentative parse fails.  */
 
 static bool
 cp_parser_template_introduction (cp_parser* parser, bool member_p)
@@ -24709,8 +24711,8 @@ cp_parser_template_introduction (cp_parser* parser, bool member_p)
   tree parms = finish_template_introduction (tmpl_decl, introduction_list);
   if (parms && parms != error_mark_node)
     {
-      cp_parser_template_declaration_after_template_parameters (parser, parms,
-								member_p);
+      cp_parser_template_declaration_after_parameters (parser, parms,
+						       member_p);
       return true;
     }
 
@@ -24718,25 +24720,16 @@ cp_parser_template_introduction (cp_parser* parser, bool member_p)
   return true;
 }
 
-/* Parse a normal template-declaration header.  */
+/* Parse a normal template-declaration following the template keyword.  */
 
 static void
-cp_parser_template_declaration_header (cp_parser* parser, bool member_p)
+cp_parser_template_declaration_normal (cp_parser* parser, bool member_p)
 {
   tree parameter_list;
   bool need_lang_pop;
-  cp_token *token;
+  location_t location = input_location;
 
-  /* Look for the `template' keyword.  */
-  token = cp_lexer_peek_token (parser->lexer);
-
-
-  /* Look for the `template' keyword.  */
-  token = cp_lexer_peek_token (parser->lexer);
-  if (!cp_parser_require_keyword (parser, RID_TEMPLATE, RT_TEMPLATE))
-    return;
-
-  /* And the `<'.  */
+  /* Look for the `<' token.  */
   if (!cp_parser_require (parser, CPP_LESS, RT_LESS))
     return;
   if (at_class_scope_p () && current_function_decl)
@@ -24744,7 +24737,7 @@ cp_parser_template_declaration_header (cp_parser* parser, bool member_p)
       /* 14.5.2.2 [temp.mem]
 
          A local class shall not have member templates.  */
-      error_at (token->location,
+      error_at (location,
                 "invalid declaration of member template in local class");
       cp_parser_skip_to_end_of_block_or_statement (parser);
       return;
@@ -24754,7 +24747,7 @@ cp_parser_template_declaration_header (cp_parser* parser, bool member_p)
      A template ... shall not have C linkage.  */
   if (current_lang_name == lang_name_c)
     {
-      error_at (token->location, "template with C linkage");
+      error_at (location, "template with C linkage");
       /* Give it C++ linkage to avoid confusing other parts of the
          front end.  */
       push_lang_context (lang_name_cplusplus);
@@ -24796,9 +24789,8 @@ cp_parser_template_declaration_header (cp_parser* parser, bool member_p)
     TEMPLATE_PARMS_CONSTRAINTS (current_template_parms) = reqs;
   }
 
-  cp_parser_template_declaration_after_template_parameters (parser,
-							    parameter_list,
-							    member_p);
+  cp_parser_template_declaration_after_parameters (parser, parameter_list,
+						   member_p);
 
   /* For the erroneous case of a template with C linkage, we pushed an
      implicit C++ linkage scope; exit that scope now.  */
@@ -24815,7 +24807,8 @@ cp_parser_template_declaration_after_export (cp_parser* parser, bool member_p)
 {
   if (cp_lexer_next_token_is_keyword (parser->lexer, RID_TEMPLATE))
     {
-      cp_parser_template_declaration_header (parser, member_p);
+      cp_lexer_consume_token (parser->lexer);
+      cp_parser_template_declaration_normal (parser, member_p);
       return true;
     }
   else if (flag_concepts)
